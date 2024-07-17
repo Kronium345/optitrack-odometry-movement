@@ -1,0 +1,6 @@
+The code transforms coordinates from the FUR (Forward, Up, Right) frame to the FLU (Forward, Left, Up) frame, then translates them to a relative frame where the first point is (0, 0, 0). 
+It converts time columns to a common datetime format and resamples the Optitrack data to align with the odometry data based on their timestamps. 
+For the initial Optitrack set (X, Y, Z) transformed to FLU, circular markers with solid lines are used, and for the secondary Optitrack set (X', Y', Z') transformed to FLU, 
+square markers with solid lines are used. The odometry data set (X, Y, Z) uses cross markers with dashed lines. The data sets are plotted to compare and highlight differences and similarities. 
+Discrepancies between the paths recorded by the Optitrack and odometry systems are visualized to identify potential inaccuracies. The initial graph set includes green X markers at starting points and red X markers at endpoints. 
+The second and third graph sets show X vs. Y (Optitrack) and X vs. Z (odometry) in the first graph, and prioritize the FLU transformation using Fleming's right-hand rule in the second graph. Appropriate shifts are applied to the odometry graphs to align them correctly.
