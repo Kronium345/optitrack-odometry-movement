@@ -50,7 +50,6 @@ axs[1].set_ylabel('Y Coordinate')
 axs[1].legend()
 
 plt.tight_layout()
-plt.show()
 
 # Step 4: Transform coordinates from FUR (Forward, Up, Right) to FLU (Forward, Left, Up)
 # - X (FUR) -> X (FLU): Remains the same.
@@ -109,9 +108,9 @@ def plot_odometry(ax, label):
 
 # Function to plot specific columns from optitrack data
 def plot_optitrack(ax, label):
-    ax.plot(combined_dataframes['FLU_x'], combined_dataframes['FLU_z'], label=label, linestyle='-', marker='x', markersize=5)
+    ax.plot(combined_dataframes['FLU_x'], combined_dataframes['FLU_y'], label=label, linestyle='-', marker='x', markersize=5)
     ax.scatter([combined_dataframes['FLU_x'].iloc[0]], [combined_dataframes['FLU_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-    ax.scatter([combined_dataframes['FLU_x'].iloc[-1]], [combined_dataframes['FLU_z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
+    ax.scatter([combined_dataframes['FLU_x'].iloc[-1]], [combined_dataframes['FLU_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
 
 # Step 10: Plot the data with specified adjustments
 fig, axs = plt.subplots(2, 1)
@@ -131,7 +130,6 @@ axs[1].set_ylabel('Y Coordinate')
 axs[1].legend()
 
 plt.tight_layout()
-plt.show()
 
 fig, axs = plt.subplots(2, 1)
 
