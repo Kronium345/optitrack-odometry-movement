@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # Step 1: Define column names for the optitrack data
 optitrack_columns = [
@@ -28,6 +29,9 @@ optitrack_df['X'] -= optitrack_df['X'].iloc[0]
 optitrack_df['Y'] -= optitrack_df['Y'].iloc[0]
 optitrack_df['Z'] -= optitrack_df['Z'].iloc[0]
 
+# Convert optitrack data from mm to meters
+optitrack_df[['X', 'Y', 'Z']] = optitrack_df[['X', 'Y', 'Z']] / 1000.0
+
 # Plotting the initial data
 fig, axs = plt.subplots(2, 1)
 
@@ -35,7 +39,7 @@ fig, axs = plt.subplots(2, 1)
 axs[0].plot(optitrack_df['X'], optitrack_df['Z'], label='Optitrack', linestyle='-', marker='x', markersize=5)
 axs[0].scatter([optitrack_df['X'].iloc[0]], [optitrack_df['Z'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
 axs[0].scatter([optitrack_df['X'].iloc[-1]], [optitrack_df['Z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[0].set_title('(X vs Z)')
+axs[0].set_title('Optitrack - Initial Data')
 axs[0].set_xlabel('X Coordinate')
 axs[0].set_ylabel('Z Coordinate')
 axs[0].legend()
@@ -44,7 +48,7 @@ axs[0].legend()
 axs[1].plot(odometry_df['pos_x'], odometry_df['pos_y'], label='Odometry', linestyle='-', marker='x', markersize=5)
 axs[1].scatter([odometry_df['pos_x'].iloc[0]], [odometry_df['pos_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
 axs[1].scatter([odometry_df['pos_x'].iloc[-1]], [odometry_df['pos_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[1].set_title('(X vs Y)')
+axs[1].set_title('Odometry - Initial Data')
 axs[1].set_xlabel('X Coordinate')
 axs[1].set_ylabel('Y Coordinate')
 axs[1].legend()
@@ -56,11 +60,9 @@ plt.tight_layout()
 # - Y (FUR) -> Z (FLU): The Z coordinate in FUR becomes the Y coordinate in FLU.
 # - Z (FUR) -> -Y (FLU): The Y coordinate in FUR becomes the negative Z coordinate in FLU.
 
-optitrack_df['FLU_x'] = optitrack_df['X'] # X remains the same
+optitrack_df['FLU_x'] = optitrack_df['X']  # X remains the same
 optitrack_df['FLU_y'] = optitrack_df['Z'] * -1  # Z becomes Y
-optitrack_df['FLU_z'] = optitrack_df['Y'] # Y becomes -Z
-
-## MAX FEEDBACK - odometry is already in FLU so does not need to be converted 
+optitrack_df['FLU_z'] = optitrack_df['Y']  # Y becomes -Z
 
 # Step 5: Putting into the relative frame (relative to the first point)
 relative_frame_origin_optitrack = optitrack_df[['FLU_x', 'FLU_y', 'FLU_z']].iloc[0]
@@ -116,15 +118,15 @@ def plot_optitrack(ax, label):
 fig, axs = plt.subplots(2, 1)
 
 # Optitrack Data - X vs Z
-plot_optitrack(axs[0], 'Optitrack (X vs Z)')
-axs[0].set_title('(X vs Z)')
+plot_optitrack(axs[0], 'Optitrack (X vs Y)')
+axs[0].set_title('Top Down View - Optitrack')
 axs[0].set_xlabel('X Coordinate')
-axs[0].set_ylabel('Z Coordinate')
+axs[0].set_ylabel('Y Coordinate')
 axs[0].legend()
 
 # Odometry Data - X vs Y
 plot_odometry(axs[1], 'Odometry (X vs Y)')
-axs[1].set_title('(X vs Y)')
+axs[1].set_title('Top Down View - Odometry')
 axs[1].set_xlabel('X Coordinate')
 axs[1].set_ylabel('Y Coordinate')
 axs[1].legend()
@@ -137,7 +139,7 @@ fig, axs = plt.subplots(2, 1)
 axs[0].plot(combined_dataframes['FLU_x'], combined_dataframes['FLU_y'], label='Optitrack (Transformed X vs Y)', linestyle='-', marker='x', markersize=5)
 axs[0].scatter([combined_dataframes['FLU_x'].iloc[0]], [combined_dataframes['FLU_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
 axs[0].scatter([combined_dataframes['FLU_x'].iloc[-1]], [combined_dataframes['FLU_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[0].set_title('FLU Transformation')
+axs[0].set_title('FLU Transformation - Optitrack')
 axs[0].set_xlabel('X Coordinate')
 axs[0].set_ylabel('Y Coordinate')
 axs[0].legend()
@@ -146,10 +148,37 @@ axs[0].legend()
 axs[1].plot(combined_dataframes['pos_x'], combined_dataframes['pos_y'], label='Odometry (Transformed X vs Y)', linestyle='-', marker='x', markersize=5)
 axs[1].scatter([combined_dataframes['pos_x'].iloc[0]], [combined_dataframes['pos_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
 axs[1].scatter([combined_dataframes['pos_x'].iloc[-1]], [combined_dataframes['pos_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[1].set_title('FLU Transformation')
+axs[1].set_title('FLU Transformation - Odometry')
 axs[1].set_xlabel('X Coordinate')
 axs[1].set_ylabel('Y Coordinate')
 axs[1].legend()
+
+plt.tight_layout()
+
+# 3D Plotting for both datasets
+fig = plt.figure()
+
+# 3D plot for Optitrack Data
+ax = fig.add_subplot(121, projection='3d')
+ax.plot(combined_dataframes['FLU_x'], combined_dataframes['FLU_y'], combined_dataframes['FLU_z'], label='Optitrack', linestyle='-', marker='x', markersize=5)
+ax.scatter([combined_dataframes['FLU_x'].iloc[0]], [combined_dataframes['FLU_y'].iloc[0]], [combined_dataframes['FLU_z'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
+ax.scatter([combined_dataframes['FLU_x'].iloc[-1]], [combined_dataframes['FLU_y'].iloc[-1]], [combined_dataframes['FLU_z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
+ax.set_title('3D View - Optitrack')
+ax.set_xlabel('X Coordinate')
+ax.set_ylabel('Y Coordinate')
+ax.set_zlabel('Z Coordinate')
+ax.legend()
+
+# 3D plot for Odometry Data
+ax = fig.add_subplot(122, projection='3d')
+ax.plot(combined_dataframes['pos_x'], combined_dataframes['pos_y'], combined_dataframes['pos_z'], label='Odometry', linestyle='-', marker='x', markersize=5)
+ax.scatter([combined_dataframes['pos_x'].iloc[0]], [combined_dataframes['pos_y'].iloc[0]], [combined_dataframes['pos_z'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
+ax.scatter([combined_dataframes['pos_x'].iloc[-1]], [combined_dataframes['pos_y'].iloc[-1]], [combined_dataframes['pos_z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
+ax.set_title('3D View - Odometry')
+ax.set_xlabel('X Coordinate')
+ax.set_ylabel('Y Coordinate')
+ax.set_zlabel('Z Coordinate')
+ax.legend()
 
 plt.tight_layout()
 plt.show()
