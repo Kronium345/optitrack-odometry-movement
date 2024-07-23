@@ -30,7 +30,7 @@ optitrack_df['Y'] -= optitrack_df['Y'].iloc[0]
 optitrack_df['Z'] -= optitrack_df['Z'].iloc[0]
 
 # Convert optitrack data from mm to meters
-optitrack_df[['X', 'Y', 'Z']] = optitrack_df[['X', 'Y', 'Z']] / 1000.0
+# optitrack_df[['X', 'Y', 'Z']] = optitrack_df[['X', 'Y', 'Z']] / 1000.0
 
 # Plotting the initial data
 fig, axs = plt.subplots(2, 1)
