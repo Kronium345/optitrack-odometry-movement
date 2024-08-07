@@ -1,0 +1,5 @@
+For the Task Given to me, what I could do is:
+
+1. I am going to add a function to write the disassembled code to a binary file
+2. Change 'view_pyc_file' to 'write_disassembled_to_file'
+3. Change the function to accept an output path
