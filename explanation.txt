@@ -4,3 +4,15 @@ For the initial Optitrack set (X, Y, Z) transformed to FLU, circular markers wit
 square markers with solid lines are used. The odometry data set (X, Y, Z) uses cross markers with dashed lines. The data sets are plotted to compare and highlight differences and similarities. 
 Discrepancies between the paths recorded by the Optitrack and odometry systems are visualized to identify potential inaccuracies. The initial graph set includes green X markers at starting points and red X markers at endpoints. 
 The second and third graph sets show X vs. Y (Optitrack) and X vs. Z (odometry) in the first graph, and prioritize the FLU transformation using Fleming's right-hand rule in the second graph. Appropriate shifts are applied to the odometry graphs to align them correctly.
+
+
+
+Transformation Matrix (Inverse Work)
+The transformation matrix 𝑇0 in the code is used to capture the initial pose (position and orientation) 
+of the ground truth data. I then invert said matrix to align the predicted positions and orientations with this initial pose, 
+ensuring that the predictions are correctly aligned with the ground truth for comparison. The matrix allows me 
+to properly combine rotation and translation into one operation, making it easier to manipulate 3D data.
+
+Extra Notes at the End:
+After applying the transformation, the output is the transformed position and orientation in the coordinate frame of the ground truth.
+The code corresponds to extracting the transformed data after applying the matrix operations.
