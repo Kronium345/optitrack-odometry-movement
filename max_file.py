@@ -1,146 +1,110 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.spatial.transform import Rotation as R
 from pathlib import Path
+from mpl_toolkits.mplot3d import Axes3D
 
 # Load the data
-data_path = Path("isaacVslam/take_2/")
-
+data_path = Path("isaacVslam/take_1_new/take_1/")
 gt_odometry = pd.read_csv(data_path / "gt_odometry.csv")
 pr_odometry = pd.read_csv(data_path / "pr_odometry.csv")
 
-# Apply the transformation to pr_odometry (FLU frame)
-pr_odometry[["pos_y", "pos_z", "y", "z"]] = -1 * pr_odometry[["pos_y", "pos_z", "y", "z"]]
+# Align the time ranges
+start_time = max(gt_odometry.iloc[0]["sec"], pr_odometry.iloc[0]["sec"])
+end_time = min(gt_odometry.iloc[-1]["sec"], pr_odometry.iloc[-1]["sec"])
+gt_odometry = gt_odometry[gt_odometry['sec'].between(start_time, end_time)]
+pr_odometry = pr_odometry[pr_odometry['sec'].between(start_time, end_time)]
 
-# Make time relative
-gt_odometry["sec"] = gt_odometry["sec"] - gt_odometry["sec"].iloc[0]
-pr_odometry["sec"] = pr_odometry["sec"] - pr_odometry["sec"].iloc[0]
+# Convert 'sec' to TimedeltaIndex and resample the data
+gt_odometry['sec'] = pd.to_timedelta(gt_odometry['sec'] - gt_odometry['sec'].iloc[0], unit='s')
+pr_odometry['sec'] = pd.to_timedelta(pr_odometry['sec'] - pr_odometry['sec'].iloc[0], unit='s')
 
-# Shift data to make the starting point (0, 0, 0)
-gt_odometry['pos_x'] -= gt_odometry['pos_x'].iloc[0]
-gt_odometry['pos_y'] -= gt_odometry['pos_y'].iloc[0]
-gt_odometry['pos_z'] -= gt_odometry['pos_z'].iloc[0]
+# Resample the data based on time (100ms intervals)
+gt_odometry = gt_odometry.set_index('sec').resample('100ms').first().interpolate().reset_index()
+pr_odometry = pr_odometry.set_index('sec').resample('100ms').first().interpolate().reset_index()
 
-pr_odometry['pos_x'] -= pr_odometry['pos_x'].iloc[0]
-pr_odometry['pos_y'] -= pr_odometry['pos_y'].iloc[0]
-pr_odometry['pos_z'] -= pr_odometry['pos_z'].iloc[0]
+# Apply the transformation to both datasets
+def apply_transformation(row, T0_inv):
+    r = R.from_quat([row['x'], row['y'], row['z'], row['w']])
+    t = np.array([row['pos_x'], row['pos_y'], row['pos_z']])
 
-# Check the sample time (Assume it's in seconds)
-sample_time_gt_odometry = gt_odometry['sec'].diff().mean()
-sample_time_pr_odometry = pr_odometry['sec'].diff().mean()
-print(f'Sample time for groundtruth: {sample_time_gt_odometry} seconds')
-print(f'Sample time for prediction: {sample_time_pr_odometry} seconds')
+    Tn = np.eye(4)
+    Tn[:3, :3] = r.as_matrix()
+    Tn[:3, 3] = t
 
-# Plotting the initial data after making time relative
-fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+    Tn_transformed = np.matmul(T0_inv, Tn)
+    transformed_pos = Tn_transformed[:3, 3]
+    transformed_rot = R.from_matrix(Tn_transformed[:3, :3])
 
-# Prediction Data - Initial
-axs[0].plot(pr_odometry['pos_x'], pr_odometry['pos_z'], label='Prediction', linestyle='-', marker='o', markersize=5)
-axs[0].scatter([pr_odometry['pos_x'].iloc[0]], [pr_odometry['pos_z'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-axs[0].scatter([pr_odometry['pos_x'].iloc[-1]], [pr_odometry['pos_z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[0].set_title('Prediction - Initial Data')
-axs[0].set_xlabel('pos_x Coordinate')
-axs[0].set_ylabel('pos_z Coordinate')
-axs[0].legend()
+    return pd.Series({
+        'sec': row["sec"],  # Convert back to seconds for the final DataFrame
+        'pos_x': transformed_pos[0],
+        'pos_y': transformed_pos[1],
+        'pos_z': transformed_pos[2],
+        'x': transformed_rot.as_quat()[0],
+        'y': transformed_rot.as_quat()[1],
+        'z': transformed_rot.as_quat()[2],
+        'w': transformed_rot.as_quat()[3]
+    })
 
-# Groundtruth Data - Initial
-axs[1].plot(gt_odometry['pos_x'], gt_odometry['pos_z'], label='Groundtruth', linestyle='--', marker='x', markersize=5)
-axs[1].scatter([gt_odometry['pos_x'].iloc[0]], [gt_odometry['pos_z'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-axs[1].scatter([gt_odometry['pos_x'].iloc[-1]], [gt_odometry['pos_z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[1].set_title('Groundtruth - Initial Data')
-axs[1].set_xlabel('pos_x Coordinate')
-axs[1].set_ylabel('pos_z Coordinate')
-axs[1].legend()
+# Apply the transformation to the prediction data
+first_row_pred = pr_odometry.iloc[0]
+r_pred = R.from_quat([first_row_pred['x'], first_row_pred['y'], first_row_pred['z'], first_row_pred['w']])
+t_pred = np.array([first_row_pred['pos_x'], first_row_pred['pos_y'], first_row_pred['pos_z']])
 
-plt.tight_layout()
+T0_pred = np.eye(4)
+T0_pred[:3, :3] = r_pred.as_matrix()
+T0_pred[:3, 3] = t_pred
+T0_pred_inv = np.linalg.inv(T0_pred)
 
-# Plotting the top-down view (X vs Y) for both datasets
-fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+pr_odometry = pr_odometry.apply(apply_transformation, axis=1, T0_inv=T0_pred_inv)
 
-# Prediction Data - Top Down View (Corrected with FLU Transformation)
-axs[0].plot(pr_odometry['pos_x'], -pr_odometry['pos_y'], label='Prediction (FLU)', linestyle='-', marker='o', markersize=5)
-axs[0].scatter([pr_odometry['pos_x'].iloc[0]], [-pr_odometry['pos_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-axs[0].scatter([pr_odometry['pos_x'].iloc[-1]], [-pr_odometry['pos_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[0].set_title('Top Down View - Prediction')
-axs[0].set_xlabel('pos_x Coordinate')
-axs[0].set_ylabel('pos_y Coordinate')
-axs[0].legend()
+# Apply the transformation to the ground truth data
+first_row_gt = gt_odometry.iloc[0]
+r_gt = R.from_quat([first_row_gt['x'], first_row_gt['y'], first_row_gt['z'], first_row_gt['w']])
+t_gt = np.array([first_row_gt['pos_x'], first_row_gt['pos_y'], first_row_gt['pos_z']])
 
-# Groundtruth Data - Top Down View
-axs[1].plot(gt_odometry['pos_x'], -gt_odometry['pos_y'], label='Groundtruth', linestyle='--', marker='x', markersize=5)
-axs[1].scatter([gt_odometry['pos_x'].iloc[0]], [-gt_odometry['pos_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-axs[1].scatter([gt_odometry['pos_x'].iloc[-1]], [-gt_odometry['pos_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[1].set_title('Top Down View - Groundtruth')
-axs[1].set_xlabel('pos_x Coordinate')
-axs[1].set_ylabel('pos_y Coordinate')
-axs[1].legend()
+T0_gt = np.eye(4)
+T0_gt[:3, :3] = r_gt.as_matrix()
+T0_gt[:3, 3] = t_gt
+T0_gt_inv = np.linalg.inv(T0_gt)
 
-plt.tight_layout()
+gt_odometry = gt_odometry.apply(apply_transformation, axis=1, T0_inv=T0_gt_inv)
 
-# Synchronize data based on movement using the Pythagorean theorem
-def calculate_movement(df, x_col, y_col, z_col):
-    return np.sqrt(df[x_col]**2 + df[y_col]**2 + df[z_col]**2)
+# Calculate Euclidean distances between ground truth and prediction for all points
+d_error = []
+for gt_row, pr_row in zip(gt_odometry.iterrows(), pr_odometry.iterrows()):
+    delta_x = gt_row[1]['pos_x'] - pr_row[1]['pos_x']
+    delta_y = gt_row[1]['pos_y'] - pr_row[1]['pos_y']
+    delta_z = gt_row[1]['pos_z'] - pr_row[1]['pos_z']
+    distance = np.sqrt(delta_x**2 + delta_y**2 + delta_z**2)
+    d_error.append(distance)
 
-gt_odometry['movement'] = calculate_movement(gt_odometry, 'pos_x', 'pos_y', 'pos_z')
-pr_odometry['movement'] = calculate_movement(pr_odometry, 'pos_x', 'pos_y', 'pos_z')
+print(f"Average distance error: {np.mean(d_error):.2f} m")
 
-threshold = 0.5  # 10 cm
-gt_odometry_sync = gt_odometry[gt_odometry['movement'] >= threshold].reset_index(drop=True)
-pr_odometry_sync = pr_odometry[pr_odometry['movement'] >= threshold].reset_index(drop=True)
+# Plot the results
+fig = plt.figure(figsize=(14, 7))
 
-# Plotting the synchronized data
-fig, axs = plt.subplots(2, 1, figsize=(10, 10))
+# 3D plot of the transformed ground truth and prediction data
+ax = fig.add_subplot(121, projection='3d')
+ax.plot(gt_odometry['pos_x'], gt_odometry['pos_y'], gt_odometry['pos_z'], label='Transformed Ground Truth', color='blue')
+ax.plot(pr_odometry['pos_x'], pr_odometry['pos_y'], pr_odometry['pos_z'], label='Prediction', color='orange')
+ax.set_title("3D Trajectory")
+ax.set_xlabel('pos_x')
+ax.set_ylabel('pos_y')
+ax.set_zlabel('pos_z')
+ax.legend()
 
-# Prediction Data - Synchronized with FLU
-axs[0].plot(pr_odometry_sync['pos_x'], pr_odometry_sync['pos_y'], label='Prediction', linestyle='-', marker='o', markersize=5)
-axs[0].scatter([pr_odometry_sync['pos_x'].iloc[0]], [pr_odometry_sync['pos_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-axs[0].scatter([pr_odometry_sync['pos_x'].iloc[-1]], [pr_odometry_sync['pos_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[0].set_title('Prediction - FLU Transformation')
-axs[0].set_xlabel('pos_x Coordinate')
-axs[0].set_ylabel('pos_y Coordinate')
-axs[0].legend()
+# Plot the error over time
+ax2 = fig.add_subplot(122)
+ax2.plot(d_error)
+ax2.set_title("Distance Error Over Time")
+ax2.set_xlabel('Index')
+ax2.set_ylabel('Error (m)')
 
-# Groundtruth Data - Synchronized
-axs[1].plot(gt_odometry_sync['pos_x'], gt_odometry_sync['pos_y'], label='Groundtruth', linestyle='--', marker='x', markersize=5)
-axs[1].scatter([gt_odometry_sync['pos_x'].iloc[0]], [gt_odometry_sync['pos_y'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-axs[1].scatter([gt_odometry_sync['pos_x'].iloc[-1]], [gt_odometry_sync['pos_y'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-axs[1].set_title('Groundtruth - FLR Transformation')
-axs[1].set_xlabel('pos_x Coordinate')
-axs[1].set_ylabel('pos_y Coordinate')
-axs[1].legend()
-
-plt.tight_layout()
-
-# 3D Plotting for both datasets
-fig = plt.figure(figsize=(15, 7))
-
-# 3D plot for Prediction Data with FLU
-ax1 = fig.add_subplot(121, projection='3d')
-ax1.plot(pr_odometry_sync['pos_x'], pr_odometry_sync['pos_y'], pr_odometry_sync['pos_z'], label='Prediction', linestyle='-', marker='o', markersize=5)
-ax1.scatter([pr_odometry_sync['pos_x'].iloc[0]], [pr_odometry_sync['pos_y'].iloc[0]], [pr_odometry_sync['pos_z'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-ax1.scatter([pr_odometry_sync['pos_x'].iloc[-1]], [pr_odometry_sync['pos_y'].iloc[-1]], [pr_odometry_sync['pos_z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-ax1.set_title('3D View - Prediction with FLU')
-ax1.set_xlabel('pos_x Coordinate')
-ax1.set_ylabel('pos_y Coordinate')
-ax1.set_zlabel('pos_z Coordinate')
-
-ax1.legend()
-
-# 3D plot for Groundtruth Data with FLR
-ax2 = fig.add_subplot(122, projection='3d')
-ax2.plot(gt_odometry_sync['pos_x'], gt_odometry_sync['pos_y'], gt_odometry_sync['pos_z'], label='Groundtruth', linestyle='--', marker='x', markersize=5)
-ax2.scatter([gt_odometry_sync['pos_x'].iloc[0]], [gt_odometry_sync['pos_y'].iloc[0]], [gt_odometry_sync['pos_z'].iloc[0]], color='green', marker='x', s=100, label='Start Point')
-ax2.scatter([gt_odometry_sync['pos_x'].iloc[-1]], [gt_odometry_sync['pos_y'].iloc[-1]], [gt_odometry_sync['pos_z'].iloc[-1]], color='red', marker='x', s=100, label='End Point')
-ax2.set_title('3D View - Groundtruth with FLR')
-ax2.set_xlabel('pos_x Coordinate')
-ax2.set_ylabel('pos_y Coordinate')
-ax2.set_zlabel('pos_z Coordinate')
-ax2.legend()
-
-plt.tight_layout()
+plt.savefig("results_two_points_corrected_3d.png")
 plt.show()
 
-# Debugging: Ensure the red X is at the endpoint for all plots
-print("Groundtruth synchronized data end point:", gt_odometry_sync[['pos_x', 'pos_y', 'pos_z']].iloc[-1])
-print("Prediction synchronized data end point:", pr_odometry_sync[['pos_x', 'pos_y', 'pos_z']].iloc[-1])
-
+# Print the average distance
+print(f"The average Euclidean distance between the transformed data is: {np.mean(d_error):.3f} units.")

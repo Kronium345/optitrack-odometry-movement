@@ -11,7 +11,7 @@ import warnings
 from pathlib import Path
 
 
-data_path = Path("isaacVslam/take_2/")
+data_path = Path("isaacVslam/take_1_new/take_1/")
 
 gt_odometry = pd.read_csv(data_path/ "gt_odometry.csv")
 pr_odometry = pd.read_csv(data_path/ "pr_odometry.csv")
