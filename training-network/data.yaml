@@ -1,0 +1,7 @@
+path: C:/Users/danie/Desktop/max_data/training-network/dataset
+
+train: images/train
+val: images/val
+
+nc: 1
+names: ['person']
